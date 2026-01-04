@@ -1,27 +1,33 @@
 from fastapi import Depends, HTTPException,Path
-import models
+
 from typing import Annotated
-from database import SessionLocal, engine
+from todo.database import SessionLocal, engine,get_db
 from sqlalchemy.orm import Session
-from models import Todo
+from todo.models import Todo
 from pydantic import BaseModel,Field
-from routers import auth
+# from routers import auth
 from fastapi import APIRouter
-from pyd import TodoRequest
+from todo.pyd import TodoRequest
+from .auth import get_current_user
+from starlette import status
 
 
-router = APIRouter()
+router = APIRouter(
+    prefix='/todos',
+    tags=['todos']
+)
 
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
     
 db_dependency = Annotated[Session,Depends(get_db)]
+user_dependency = Annotated[dict,Depends(get_current_user)]
 
 
 
@@ -34,28 +40,40 @@ db_dependency = Annotated[Session,Depends(get_db)]
 
 
 @router.get('/get')
-async def get_all_data(db:db_dependency):
-    return db.query(Todo).all()
+async def get_all_data(user:user_dependency,db:db_dependency):
+    if user is None:
+        HTTPException(detail="User Not authenticate")
+    return db.query(Todo).filter(Todo.owner_id == user.get('id')).all()
 
 
 @router.get("/getid/{db_id}")
-async def get_book_by_id(db:db_dependency,db_id:int = Path(gt=0)):
-    db_model = db.query(Todo).filter(Todo.id == db_id).first()
+async def get_book_by_id(user:user_dependency,db:db_dependency,db_id:int = Path(gt=0)):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="User not found")
+    
+    db_model = db.query(Todo).filter(Todo.id == db_id).filter(Todo.owner_id == user.get('id')).first()
     if db_model:
         return db_model
     raise HTTPException(status_code=404,detail="Not Found ID")
     
     
-@router.post("/createTask/")
-async def create_task(db:db_dependency, todo_Req: TodoRequest):
-    todo_model = Todo(**todo_Req.dict())
+@router.post("/todo")
+async def create_task(user:user_dependency,db:db_dependency, todo_Req: TodoRequest):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="User not found")
+    todo_model = Todo(**todo_Req.dict(),owner_id = user.get('id'))
     db.add(todo_model)
     db.commit()
+    db.refresh(todo_model)
+    return todo_model
     
 
 @router.put("/updateTodo/{to_do_id}")
-async def update_task(db: db_dependency, to_do_id: int,todo_req :TodoRequest):
-    todo_model = db.query(Todo).filter(Todo.id == to_do_id).first()
+async def update_task(user:user_dependency,db: db_dependency, to_do_id: int,todo_req :TodoRequest):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="User not found")
+    
+    todo_model = db.query(Todo).filter(Todo.id == to_do_id).filter(Todo.owner_id == user.get('id')).first()
     if not todo_model:
         raise HTTPException(status_code=404,detail="Not found")
     todo_model.title = todo_req.title
@@ -65,11 +83,16 @@ async def update_task(db: db_dependency, to_do_id: int,todo_req :TodoRequest):
     
     db.add(todo_model)
     db.commit()
+    db.refresh(todo_model)
+    return todo_model
     
 
 @router.delete("/delete/{todo_id}")
-async def delete(db:db_dependency, todo_id:int):
-    todo_model = db.query(Todo).filter(Todo.id == todo_id).first()
+async def delete(user: user_dependency,db:db_dependency, todo_id:int):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="User not found")
+    
+    todo_model = db.query(Todo).filter(Todo.id == todo_id).filter(Todo.owner_id == user.get('id')).first()
     if not todo_model:
         raise HTTPException(status_code=404, detail="Not found id")
     db.query(Todo).filter(Todo.id == todo_id).delete()

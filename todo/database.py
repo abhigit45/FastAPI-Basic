@@ -8,10 +8,19 @@ from pydantic import BaseModel
 from sqlalchemy.ext.declarative import declarative_base
 
 
-app = FastAPI()
+# app = FastAPI()
+
+
 
 # Database setup
-DATABASE_URL = "sqlite:///./todoapp.db"
+DATABASE_URL = "postgresql://postgres:1234@localhost/TodoApplicationDatabase"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

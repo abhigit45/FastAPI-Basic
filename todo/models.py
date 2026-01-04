@@ -1,5 +1,10 @@
-from database import Base
-from sqlalchemy import Column,Integer,String,Boolean,ForeignKey
+# from database import Base
+# from sqlalchemy import Column,Integer,String,Boolean,ForeignKey
+
+from todo.database import Base
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+
+
 
 class Users(Base):
     __tablename__ = "users"
@@ -11,11 +16,12 @@ class Users(Base):
     hash_password = Column(String)
     is_active = Column(Boolean,default=True)
     role = Column(String)
+    phone_number = Column(String)
 
 
 
 class Todo(Base):
-    __tablename__ = "todo"
+    __tablename__ = "todos"
     id = Column(Integer,primary_key=True,index=True)
     title = Column(String)
     description = Column(String)
